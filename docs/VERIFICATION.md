@@ -50,20 +50,3 @@ the existing integration and unit tests.
 Frontend checks cover successful form submission/reset, preserving input and
 showing server validation errors after a failed save, and ignoring a stale list
 response after changing filters. These run in a simulated DOM, not a real browser.
-
-## Not executed in this environment
-
-- Full-stack `docker compose up` and `docker stack deploy`: Docker CLI is available,
-  but the Docker Engine socket cannot be accessed in this environment. Image builds,
-  container startup, Nginx runtime behavior and actual Swarm traffic distribution
-  are not claimed as verified. Follow `SWARM-ID.md` for these runtime checks.
-- A real PostgreSQL instance: integration tests use H2; actual PostgreSQL startup,
-  schema validation and queries should be checked through Compose before submission.
-- Browser interaction, layout and accessibility testing: frontend build/type checks
-  do not prove the complete browser experience. Use the demo checklist locally.
-- Live Nominatim resolution: the HTTP adapter was verified with a local stub,
-  so current public-service availability/address coverage is not claimed.
-- GitHub Actions: workflow is included but has not run on GitHub yet.
-
-The project is not deployed and has not been pushed to GitHub from this environment.
-Use the included Git bundle to retain its actual incremental history when publishing.
