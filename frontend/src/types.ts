@@ -18,17 +18,38 @@ export interface Delivery {
   geocodedAt: string | null;
   resolvedAddress: string | null;
   geocodeSource: GeocodeSource;
-  estimate: { costIdr: number; minDays: number; maxDays: number } | null;
+  estimate: ShippingEstimate | null;
 }
 export interface DeliveryInput {
   orderRef: string;
   destAddress: string;
   status: DeliveryStatus;
 }
-export const statusLabels: Record<DeliveryStatus, string> = {
+export const DELIVERY_STATUS_LABELS: Record<DeliveryStatus, string> = {
   PLANNED: "Direncanakan",
   IN_TRANSIT: "Dalam perjalanan",
   DELIVERED: "Terkirim",
   CANCELLED: "Dibatalkan",
 };
-export const zones: Zone[] = ["LOCAL", "REGIONAL", "LONG_HAUL", "UNKNOWN"];
+export const DELIVERY_ZONES: Zone[] = [
+  "LOCAL",
+  "REGIONAL",
+  "LONG_HAUL",
+  "UNKNOWN",
+];
+
+export interface ShippingEstimate {
+  costIdr: number;
+  minDays: number;
+  maxDays: number;
+}
+
+export interface FactoryCoordinates {
+  latitude: number;
+  longitude: number;
+}
+
+export interface DeliveryFilters {
+  zone: Zone | "";
+  status: DeliveryStatus | "";
+}

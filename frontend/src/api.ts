@@ -1,56 +1,100 @@
-import type { Delivery, DeliveryInput, DeliveryStatus, Zone } from "./types";
+import type {
+  Delivery,
+  DeliveryFilters,
+  DeliveryInput,
+  FactoryCoordinates,
+} from "./types";
+
+interface ApiErrorResponse {
+  message?: string;
+  errors?: Record<string, string>;
+}
 
 export class ApiError extends Error {
   constructor(
     message: string,
-    public fields: Record<string, string> = {},
+    public fieldErrors: Record<string, string> = {},
   ) {
     super(message);
+    this.name = "ApiError";
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch("/api" + path, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...options.headers,
-    },
-  });
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new ApiError(
-      error.message || `Permintaan gagal (${response.status}). Coba kembali.`,
-      error.errors,
-    );
+export function getRequestErrorMessage(error: unknown): string {
+  if (error instanceof ApiError) {
+    return error.message;
   }
-  if (response.status === 204) return undefined as T;
+  return "Tidak dapat terhubung ke server. Periksa koneksi lalu coba kembali.";
+}
+
+async function sendRequest<ResponseBody>(
+  path: string,
+  options: RequestInit = {},
+): Promise<ResponseBody> {
+  const headers = new Headers(options.headers);
+  if (options.body) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(`/api${path}`, { ...options, headers });
+  if (!response.ok) {
+    const errorResponse: ApiErrorResponse = await response
+      .json()
+      .catch(() => ({}));
+    const message =
+      errorResponse.message ||
+      `Permintaan gagal (${response.status}). Coba kembali.`;
+    throw new ApiError(message, errorResponse.errors);
+  }
+  if (response.status === 204) {
+    return undefined as ResponseBody;
+  }
   return response.json();
 }
 
-export const api = {
-  list: (zone: Zone | "", status: DeliveryStatus | "", signal: AbortSignal) => {
-    const query = new URLSearchParams();
-    if (zone) query.set("zone", zone);
-    if (status) query.set("status", status);
-    return request<Delivery[]>("/deliveries?" + query, { signal });
+export const deliveryApi = {
+  listDeliveries(
+    filters: DeliveryFilters,
+    signal: AbortSignal,
+  ): Promise<Delivery[]> {
+    const queryParameters = new URLSearchParams();
+    if (filters.zone) {
+      queryParameters.set("zone", filters.zone);
+    }
+    if (filters.status) {
+      queryParameters.set("status", filters.status);
+    }
+    return sendRequest(`/deliveries?${queryParameters}`, { signal });
   },
-  config: (signal: AbortSignal) =>
-    request<{ factory: { latitude: number; longitude: number } }>("/config", {
-      signal,
-    }),
-  create: (input: DeliveryInput) =>
-    request<Delivery>("/deliveries", {
+
+  getConfiguration(
+    signal: AbortSignal,
+  ): Promise<{ factory: FactoryCoordinates }> {
+    return sendRequest("/config", { signal });
+  },
+
+  createDelivery(deliveryInput: DeliveryInput): Promise<Delivery> {
+    return sendRequest("/deliveries", {
       method: "POST",
-      body: JSON.stringify(input),
-    }),
-  update: (id: number, input: DeliveryInput) =>
-    request<Delivery>(`/deliveries/${id}`, {
+      body: JSON.stringify(deliveryInput),
+    });
+  },
+
+  updateDelivery(
+    deliveryId: number,
+    deliveryInput: DeliveryInput,
+  ): Promise<Delivery> {
+    return sendRequest(`/deliveries/${deliveryId}`, {
       method: "PUT",
-      body: JSON.stringify(input),
-    }),
-  remove: (id: number) =>
-    request<void>(`/deliveries/${id}`, { method: "DELETE" }),
-  retry: (id: number) =>
-    request<Delivery>(`/deliveries/${id}/geocode`, { method: "POST" }),
+      body: JSON.stringify(deliveryInput),
+    });
+  },
+
+  deleteDelivery(deliveryId: number): Promise<void> {
+    return sendRequest(`/deliveries/${deliveryId}`, { method: "DELETE" });
+  },
+
+  retryGeocoding(deliveryId: number): Promise<Delivery> {
+    return sendRequest(`/deliveries/${deliveryId}/geocode`, { method: "POST" });
+  },
 };
