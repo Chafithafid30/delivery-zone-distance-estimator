@@ -70,13 +70,20 @@ class DeliveryApiTest {
                 .andExpect(jsonPath("$.zone").value("LOCAL"));
         verifyNoInteractions(provider);
 
-        when(provider.lookup("surabaya")).thenReturn(Optional.of(new GeocodingProvider.Place(new Coordinates(-7.2575, 112.7521), "Surabaya")));
+        doReturn(Optional.of(new GeocodingProvider.Place(new Coordinates(-7.2575, 112.7521), "Surabaya")))
+                .when(provider).lookup("surabaya");
         mvc.perform(post("/api/deliveries/" + unknownId + "/geocode"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.zone").value("LONG_HAUL"));
         mvc.perform(put("/api/deliveries/" + id).contentType(MediaType.APPLICATION_JSON)
                 .content(body("DO-001", "Surabaya", "IN_TRANSIT")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.zone").value("LONG_HAUL"))
                 .andExpect(jsonPath("$.geocodeSource").value("CACHE"));
+        when(provider.lookup("unavailable destination")).thenThrow(new ProviderUnavailableException("503"));
+        mvc.perform(put("/api/deliveries/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(body("DO-001", "Unavailable destination", "IN_TRANSIT")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.zone").value("UNKNOWN"))
+                .andExpect(jsonPath("$.destLat").isEmpty()).andExpect(jsonPath("$.destLng").isEmpty())
+                .andExpect(jsonPath("$.distanceKm").isEmpty()).andExpect(jsonPath("$.geocodedAt").isEmpty());
         mvc.perform(delete("/api/deliveries/" + id)).andExpect(status().isNoContent());
         mvc.perform(get("/api/deliveries/" + id)).andExpect(status().isNotFound());
     }

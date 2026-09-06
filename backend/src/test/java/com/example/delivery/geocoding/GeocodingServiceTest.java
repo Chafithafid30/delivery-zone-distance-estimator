@@ -52,7 +52,8 @@ class GeocodingServiceTest {
 
     @Test void providerFailureRechecksCache() {
         GeocodeCache entry = new GeocodeCache("monas", place, Instant.now());
-        when(cache.findByAddress("monas")).thenReturn(Optional.empty(), Optional.empty(), Optional.of(entry));
+        when(cache.findByAddress("monas")).thenReturn(Optional.empty())
+                .thenReturn(Optional.empty()).thenReturn(Optional.of(entry));
         when(provider.lookup("monas")).thenThrow(new ProviderUnavailableException("HTTP 503"));
         assertThat(service.resolve("Monas").source()).isEqualTo(GeocodeResult.Source.CACHE);
     }
