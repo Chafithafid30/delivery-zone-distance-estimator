@@ -1,6 +1,10 @@
 # Menjalankan Delivery Zone
 
-Panduan ini menggunakan **Docker Desktop dan Git Bash di Windows**. Seluruh aplikasi—frontend, backend, dan database—dijalankan dengan Docker Compose. Kamu tidak perlu menginstal Java, Maven, atau Node.js secara terpisah.
+Panduan ini menggunakan **Docker Desktop dan Git Bash di Windows**. Seluruh aplikasi—frontend, backend, dan database—dijalankan dengan Docker Compose. Jadi tidak perlu menginstal Java, Maven, atau Node.js secara terpisah.
+
+Proyek ini menggunakan **PostgreSQL** sebagai relational database dan **Nominatim (OpenStreetMap)** sebagai external API untuk melakukan forward geocoding alamat. Nominatim tidak memerlukan API key.
+
+Hasil geocoding disimpan pada database melalui cache sehingga alamat yang sudah pernah berhasil dicari dapat digunakan kembali tanpa melakukan request API berulang. Jika layanan geocoding sedang tidak tersedia dan koordinat tidak ditemukan di cache, delivery tetap dapat disimpan dengan zona `UNKNOWN`.
 
 ## 1. Siapkan Docker Desktop
 
