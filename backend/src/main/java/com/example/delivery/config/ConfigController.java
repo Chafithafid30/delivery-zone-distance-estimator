@@ -1,6 +1,7 @@
 package com.example.delivery.config;
 
 import com.example.delivery.geocoding.Coordinates;
+
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -8,9 +9,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/config")
 public class ConfigController {
-    private final FactoryLocation factory;
-    public ConfigController(FactoryLocation factory) { this.factory = factory; }
+    private final FactoryLocation factoryLocation;
+
+    public ConfigController(FactoryLocation factoryLocation) {
+        this.factoryLocation = factoryLocation;
+    }
+
     @GetMapping
-    public ConfigResponse config() { return new ConfigResponse(factory.coordinates()); }
+    public ConfigResponse getConfiguration() {
+        return new ConfigResponse(factoryLocation.coordinates());
+    }
+
     public record ConfigResponse(Coordinates factory) {}
 }

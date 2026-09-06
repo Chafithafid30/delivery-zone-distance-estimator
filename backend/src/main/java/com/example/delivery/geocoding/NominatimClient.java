@@ -2,6 +2,7 @@ package com.example.delivery.geocoding;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -17,50 +18,76 @@ import java.util.Optional;
 
 @Component
 public class NominatimClient implements GeocodingProvider {
-    private final HttpClient client;
-    private final ObjectMapper mapper;
+    private static final int MAX_DISPLAY_NAME_LENGTH = 500;
+
+    private final HttpClient httpClient;
+    private final ObjectMapper objectMapper;
     private final String baseUrl;
     private final String userAgent;
-    private final Duration timeout;
+    private final Duration requestTimeout;
 
-    public NominatimClient(ObjectMapper mapper,
+    public NominatimClient(
+            ObjectMapper objectMapper,
             @Value("${app.geocoding.base-url}") String baseUrl,
             @Value("${app.geocoding.user-agent}") String userAgent,
             @Value("${app.geocoding.timeout-seconds}") int timeoutSeconds) {
-        this.mapper = mapper;
+        this.objectMapper = objectMapper;
         this.baseUrl = baseUrl.replaceAll("/+$", "");
         this.userAgent = userAgent;
-        this.timeout = Duration.ofSeconds(timeoutSeconds);
-        this.client = HttpClient.newBuilder().connectTimeout(timeout).build();
+        this.requestTimeout = Duration.ofSeconds(timeoutSeconds);
+        this.httpClient = HttpClient.newBuilder().connectTimeout(requestTimeout).build();
     }
 
     @Override
-    public Optional<Place> lookup(String address) {
-        URI uri = URI.create(baseUrl + "/search?q="
-                + URLEncoder.encode(address, StandardCharsets.UTF_8) + "&format=json&limit=1");
-        HttpRequest request = HttpRequest.newBuilder(uri).timeout(timeout)
-                .header("User-Agent", userAgent).header("Accept", "application/json").GET().build();
+    public Optional<Place> lookupAddress(String address) {
+        HttpRequest searchRequest = buildSearchRequest(address);
         try {
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(searchRequest, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
-                throw new ProviderUnavailableException("Geocoder returned HTTP " + response.statusCode());
+                throw new ProviderUnavailableException(
+                        "Geocoder returned HTTP " + response.statusCode());
             }
-            JsonNode items = mapper.readTree(response.body());
-            if (items == null || !items.isArray()) {
-                throw new ProviderUnavailableException("Unexpected geocoder response");
-            }
-            if (items.isEmpty()) return Optional.empty();
-            JsonNode item = items.get(0);
-            Coordinates coordinates = new Coordinates(
-                    Double.parseDouble(item.path("lat").asText()),
-                    Double.parseDouble(item.path("lon").asText()));
-            String displayName = item.path("display_name").asText(address);
-            return Optional.of(new Place(coordinates, displayName.substring(0, Math.min(500, displayName.length()))));
-        } catch (InterruptedException e) {
+            return readSearchResult(response.body(), address);
+        } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            throw new ProviderUnavailableException("Geocoding interrupted", e);
-        } catch (IOException | IllegalArgumentException e) {
-            throw new ProviderUnavailableException("Geocoder is unavailable or returned invalid data", e);
+            throw new ProviderUnavailableException("Geocoding interrupted", exception);
+        } catch (IOException | IllegalArgumentException exception) {
+            throw new ProviderUnavailableException(
+                    "Geocoder is unavailable or returned invalid data", exception);
         }
+    }
+
+    private HttpRequest buildSearchRequest(String address) {
+        String encodedAddress = URLEncoder.encode(address, StandardCharsets.UTF_8);
+        URI searchUri =
+                URI.create(baseUrl + "/search?q=" + encodedAddress + "&format=json&limit=1");
+        return HttpRequest.newBuilder(searchUri)
+                .timeout(requestTimeout)
+                .header("User-Agent", userAgent)
+                .header("Accept", "application/json")
+                .GET()
+                .build();
+    }
+
+    private Optional<Place> readSearchResult(String responseBody, String requestedAddress)
+            throws IOException {
+        JsonNode searchResults = objectMapper.readTree(responseBody);
+        if (searchResults == null || !searchResults.isArray()) {
+            throw new ProviderUnavailableException("Unexpected geocoder response");
+        }
+        if (searchResults.isEmpty()) {
+            return Optional.empty();
+        }
+
+        JsonNode firstResult = searchResults.get(0);
+        Coordinates coordinates =
+                new Coordinates(
+                        Double.parseDouble(firstResult.path("lat").asText()),
+                        Double.parseDouble(firstResult.path("lon").asText()));
+        String displayName = firstResult.path("display_name").asText(requestedAddress);
+        String boundedDisplayName =
+                displayName.substring(0, Math.min(MAX_DISPLAY_NAME_LENGTH, displayName.length()));
+        return Optional.of(new Place(coordinates, boundedDisplayName));
     }
 }

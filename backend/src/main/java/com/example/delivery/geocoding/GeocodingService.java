@@ -2,72 +2,87 @@ package com.example.delivery.geocoding;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
+import java.util.Optional;
 
 @Service
 public class GeocodingService {
-    private static final Logger log = LoggerFactory.getLogger(GeocodingService.class);
-    private final GeocodeCacheRepository cache;
-    private final GeocodingProvider provider;
-    private final long intervalNanos;
-    private final long cooldownNanos;
-    private long lastCallFinished;
-    private long failureAt;
-    private boolean hasCalled;
-    private boolean coolingDown;
+    private static final Logger logger = LoggerFactory.getLogger(GeocodingService.class);
 
-    public GeocodingService(GeocodeCacheRepository cache, GeocodingProvider provider,
-            @Value("${app.geocoding.interval-ms}") long intervalMs,
-            @Value("${app.geocoding.cooldown-seconds}") long cooldownSeconds) {
-        this.cache = cache;
-        this.provider = provider;
-        this.intervalNanos = TimeUnit.MILLISECONDS.toNanos(Math.max(1000, intervalMs));
-        this.cooldownNanos = TimeUnit.SECONDS.toNanos(Math.max(0, cooldownSeconds));
+    private final GeocodeCacheRepository cacheRepository;
+    private final GeocodingProvider geocodingProvider;
+    private final GeocodingRequestPolicy requestPolicy;
+
+    public GeocodingService(
+            GeocodeCacheRepository cacheRepository,
+            GeocodingProvider geocodingProvider,
+            GeocodingRequestPolicy requestPolicy) {
+        this.cacheRepository = cacheRepository;
+        this.geocodingProvider = geocodingProvider;
+        this.requestPolicy = requestPolicy;
     }
 
-    public GeocodeResult resolve(String address) {
-        String key = AddressNormalizer.normalize(address);
-        var existing = cache.findByAddress(key);
-        // Cache hits do not wait for the outbound request lock or an unhealthy provider.
-        if (existing.isPresent()) return GeocodeResult.from(existing.get(), GeocodeResult.Source.CACHE);
-        return resolveMiss(key);
+    public GeocodeResult resolveAddress(String address) {
+        String normalizedAddress = AddressNormalizer.normalize(address);
+        Optional<GeocodeResult> cachedResult = findCachedResult(normalizedAddress);
+
+        // Cached addresses remain available even while another lookup is waiting on the API.
+        if (cachedResult.isPresent()) {
+            return cachedResult.get();
+        }
+        return resolveUncachedAddress(normalizedAddress);
     }
 
-    private synchronized GeocodeResult resolveMiss(String key) {
-        // Recheck under lock: concurrent requests for the same address call the API once.
-        var existing = cache.findByAddress(key);
-        if (existing.isPresent()) return GeocodeResult.from(existing.get(), GeocodeResult.Source.CACHE);
-        if (coolingDown && System.nanoTime() - failureAt < cooldownNanos) {
+    private synchronized GeocodeResult resolveUncachedAddress(String normalizedAddress) {
+        // A previous request may have filled the cache while this request waited for the lock.
+        Optional<GeocodeResult> cachedResult = findCachedResult(normalizedAddress);
+        if (cachedResult.isPresent()) {
+            return cachedResult.get();
+        }
+        if (requestPolicy.isInCooldown()) {
             return GeocodeResult.unknown(GeocodeResult.Source.UNAVAILABLE);
         }
+
         try {
-            if (hasCalled) {
-                long remaining = intervalNanos - (System.nanoTime() - lastCallFinished);
-                if (remaining > 0) TimeUnit.NANOSECONDS.sleep(remaining);
-            }
-            var place = provider.lookup(key);
-            coolingDown = false;
-            if (place.isEmpty()) return GeocodeResult.unknown(GeocodeResult.Source.NOT_FOUND);
-            var entry = cache.saveAndFlush(new GeocodeCache(key, place.get(), Instant.now()));
-            return GeocodeResult.from(entry, GeocodeResult.Source.NOMINATIM);
-        } catch (ProviderUnavailableException e) {
-            failureAt = System.nanoTime();
-            coolingDown = true;
-            // Addresses and response payloads are deliberately omitted from logs.
-            log.warn("Geocoding provider unavailable; serving unresolved deliveries during cooldown");
-            return cache.findByAddress(key)
-                    .map(entry -> GeocodeResult.from(entry, GeocodeResult.Source.CACHE))
+            requestPolicy.awaitNextRequest();
+            return fetchAndCacheAddress(normalizedAddress);
+        } catch (ProviderUnavailableException exception) {
+            requestPolicy.recordFailure();
+            // Do not include customer addresses or provider response bodies in logs.
+            logger.warn(
+                    "Geocoding provider unavailable; unresolved deliveries will use UNKNOWN during"
+                        + " cooldown");
+            return findCachedResult(normalizedAddress)
                     .orElseGet(() -> GeocodeResult.unknown(GeocodeResult.Source.UNAVAILABLE));
-        } catch (InterruptedException e) {
+        } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             return GeocodeResult.unknown(GeocodeResult.Source.UNAVAILABLE);
-        } finally {
-            lastCallFinished = System.nanoTime();
-            hasCalled = true;
         }
+    }
+
+    private GeocodeResult fetchAndCacheAddress(String normalizedAddress) {
+        Optional<GeocodingProvider.Place> resolvedPlace;
+        try {
+            resolvedPlace = geocodingProvider.lookupAddress(normalizedAddress);
+            requestPolicy.recordSuccess();
+        } finally {
+            requestPolicy.recordRequestCompleted();
+        }
+
+        if (resolvedPlace.isEmpty()) {
+            return GeocodeResult.unknown(GeocodeResult.Source.NOT_FOUND);
+        }
+        GeocodeCache cacheEntry =
+                new GeocodeCache(normalizedAddress, resolvedPlace.get(), Instant.now());
+        GeocodeCache savedEntry = cacheRepository.saveAndFlush(cacheEntry);
+        return GeocodeResult.from(savedEntry, GeocodeResult.Source.NOMINATIM);
+    }
+
+    private Optional<GeocodeResult> findCachedResult(String normalizedAddress) {
+        return cacheRepository
+                .findByNormalizedAddress(normalizedAddress)
+                .map(cacheEntry -> GeocodeResult.from(cacheEntry, GeocodeResult.Source.CACHE));
     }
 }
