@@ -125,6 +125,10 @@ docker compose up -d
 
 Buka **http://localhost:3001**. API backend kini di port `8081` dan database di port `5433`. Nilai `export` berlaku pada terminal tersebut; jalankan lagi jika diperlukan dari terminal baru.
 
+## Tambahan
+
+Repository juga menyediakan konfigurasi Docker Swarm sebagai eksplorasi tambahan.
+
 ### Jika Delivery Zone sebelumnya dijalankan dengan Swarm
 
 Jika ingin beralih ke Compose, hentikan stack Swarm terlebih dahulu agar port tidak bentrok:
