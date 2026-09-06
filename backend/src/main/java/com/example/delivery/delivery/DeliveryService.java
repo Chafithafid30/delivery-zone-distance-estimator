@@ -1,25 +1,27 @@
 package com.example.delivery.delivery;
 
 import com.example.delivery.config.FactoryLocation;
+import com.example.delivery.geocoding.AddressResolver;
 import com.example.delivery.geocoding.GeocodeResult;
-import com.example.delivery.geocoding.GeocodingService;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
+@Profile("!geocoder")
 public class DeliveryService {
     private final DeliveryRepository deliveryRepository;
-    private final GeocodingService geocodingService;
+    private final AddressResolver addressResolver;
     private final FactoryLocation factoryLocation;
 
     public DeliveryService(
             DeliveryRepository deliveryRepository,
-            GeocodingService geocodingService,
+            AddressResolver addressResolver,
             FactoryLocation factoryLocation) {
         this.deliveryRepository = deliveryRepository;
-        this.geocodingService = geocodingService;
+        this.addressResolver = addressResolver;
         this.factoryLocation = factoryLocation;
     }
 
@@ -72,7 +74,7 @@ public class DeliveryService {
 
     private void updateDestinationLocation(Delivery delivery) {
         GeocodeResult geocodeResult =
-                geocodingService.resolveAddress(delivery.getDestinationAddress());
+                addressResolver.resolveAddress(delivery.getDestinationAddress());
         delivery.updateDestination(geocodeResult, factoryLocation.coordinates());
     }
 

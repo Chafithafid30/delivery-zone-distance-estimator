@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.time.Duration;
 import java.util.Optional;
 
 @Component
+@ConditionalOnProperty(name = "app.geocoding.mode", havingValue = "local", matchIfMissing = true)
 public class NominatimClient implements GeocodingProvider {
     private static final int MAX_DISPLAY_NAME_LENGTH = 500;
 

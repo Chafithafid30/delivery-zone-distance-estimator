@@ -27,6 +27,9 @@ app:
     latitude: ${FACTORY_LAT:-6.1751}
     longitude: ${FACTORY_LNG:106.8650}
   geocoding:
+    mode: local
+    remote-url: ${GEOCODING_SERVICE_URL:http://geocoder:8080}
+    remote-timeout-seconds: 20
     base-url: ${GEOCODING_BASE_URL:https://nominatim.openstreetmap.org}
     user-agent: ${GEOCODING_USER_AGENT:DeliveryZoneAssessment/1.0 (B-002 educational dispatch demo)}
     interval-ms: 1100

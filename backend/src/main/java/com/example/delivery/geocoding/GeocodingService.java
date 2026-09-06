@@ -2,13 +2,15 @@ package com.example.delivery.geocoding;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Optional;
 
 @Service
-public class GeocodingService {
+@ConditionalOnProperty(name = "app.geocoding.mode", havingValue = "local", matchIfMissing = true)
+public class GeocodingService implements AddressResolver {
     private static final Logger logger = LoggerFactory.getLogger(GeocodingService.class);
 
     private final GeocodeCacheRepository cacheRepository;
@@ -24,6 +26,7 @@ public class GeocodingService {
         this.requestPolicy = requestPolicy;
     }
 
+    @Override
     public GeocodeResult resolveAddress(String address) {
         String normalizedAddress = AddressNormalizer.normalize(address);
         Optional<GeocodeResult> cachedResult = findCachedResult(normalizedAddress);
@@ -53,7 +56,7 @@ public class GeocodingService {
             // Do not include customer addresses or provider response bodies in logs.
             logger.warn(
                     "Geocoding provider unavailable; unresolved deliveries will use UNKNOWN during"
-                        + " cooldown");
+                            + " cooldown");
             return findCachedResult(normalizedAddress)
                     .orElseGet(() -> GeocodeResult.unknown(GeocodeResult.Source.UNAVAILABLE));
         } catch (InterruptedException exception) {

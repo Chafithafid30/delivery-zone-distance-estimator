@@ -1,12 +1,14 @@
 package com.example.delivery.geocoding;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.TimeUnit;
 
 /** Request timing state, accessed only while GeocodingService holds its outbound lock. */
 @Component
+@ConditionalOnProperty(name = "app.geocoding.mode", havingValue = "local", matchIfMissing = true)
 public class GeocodingRequestPolicy {
     private static final long MINIMUM_REQUEST_INTERVAL_MS = 1000;
 

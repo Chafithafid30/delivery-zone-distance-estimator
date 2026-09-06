@@ -2,6 +2,7 @@ package com.example.delivery.delivery;
 
 import jakarta.validation.Valid;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,6 +19,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/deliveries")
+@Profile("!geocoder")
 public class DeliveryController {
     private final DeliveryService deliveryService;
 

@@ -1,0 +1,7 @@
+app:
+  geocoding:
+    mode: local
+spring:
+  flyway:
+    connect-retries: 30
+    connect-retries-interval: 2s
