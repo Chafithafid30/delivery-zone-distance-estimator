@@ -9,6 +9,7 @@ Date: 6 September 2026.
 | Backend Java compilation | Passed on Java 17 |
 | Maven verify and executable Spring Boot JAR packaging | Passed with Maven 3.9.9 |
 | Backend tests | 35 passed; 0 failures, 0 errors, 0 skipped |
+| Frontend unit tests | 3 passed in Vitest with React Testing Library and jsdom |
 | Flyway migration and JPA schema validation | Passed against H2 in PostgreSQL compatibility mode |
 | Frontend TypeScript checking and Vite production build | Passed on Node.js 24.19.0 |
 | Compose YAML and referenced build contexts | Parsed and checked |
@@ -31,6 +32,14 @@ Test coverage by class:
 
 Tests mock interfaces using Mockito's subclass mock maker; no dynamic Java-agent
 attachment is needed. Public Nominatim is never called by these tests.
+
+The backend checks and build were rerun after the Clean Code refactor. The JSON
+contract, database columns, cache behavior, and zone boundaries remain covered by
+the existing integration and unit tests.
+
+Frontend checks cover successful form submission/reset, preserving input and
+showing server validation errors after a failed save, and ignoring a stale list
+response after changing filters. These run in a simulated DOM, not a real browser.
 
 ## Not executed in this environment
 

@@ -136,10 +136,16 @@ flowchart TD
 ```
 
 - `backend/.../delivery`: controller, service, entity/repository, zones and estimates.
-- `backend/.../geocoding`: provider interface, HTTP adapter, cache and Haversine.
+- `backend/.../geocoding`: provider interface, HTTP adapter, cache, request timing policy and Haversine.
 - `backend/.../config`: factory configuration and read-only configuration endpoint.
 - `backend/.../shared`: consistent JSON errors.
-- `frontend/src`: React board, typed API calls, contracts and responsive styles.
+- `frontend/src/components`: delivery form, board, cards, coordinate details and delete dialog.
+- `frontend/src/hooks/useDeliveries.ts`: data loading, cancellation and refresh.
+- `frontend/src/api.ts` / `formatters.ts`: typed HTTP calls and presentation formatting.
+
+`Delivery` encapsulates state changes; `DeliveryService` coordinates use cases.
+Naming and the practical Clean Code, SOLID and KISS decisions are explained in
+[docs/CODE-STYLE-ID.md](docs/CODE-STYLE-ID.md).
 
 Schema: `backend/src/main/resources/db/migration/V1__create_delivery_and_geocode_cache.sql`.
 PostgreSQL is used because Oracle is optional. H2 provides an optional file-backed
@@ -231,10 +237,11 @@ mvn verify
 ```bash
 cd frontend
 npm ci
+npm test
 npm run build
 ```
 
-GitHub Actions repeats these checks. Backend image builds run tests too. See
+GitHub Actions repeats these checks. Both application image builds run tests too. See
 [docs/VERIFICATION.md](docs/VERIFICATION.md) for checks actually performed and
 environment limitations, and [docs/DEMO-ID.md](docs/DEMO-ID.md) for an Indonesian
 demo/interview guide.
