@@ -1,5 +1,3 @@
-# Panduan demo dan penjelasan interview
-
 ## Menjalankan dan mendemonstrasikan aplikasi
 
 Untuk versi Swarm dengan load balancing, ikuti [SWARM-ID.md](SWARM-ID.md).
