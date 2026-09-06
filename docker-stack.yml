@@ -1,0 +1,149 @@
+version: "3.8"
+
+# Build the two application images before deploying. See docs/SWARM-ID.md.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: delivery_zone
+      POSTGRES_USER: ${DB_USER:-delivery}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-delivery_dev}
+    volumes:
+      - delivery_data:/var/lib/postgresql/data
+    networks: [application]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d delivery_zone"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    deploy:
+      replicas: 1
+      placement:
+        constraints: ["node.labels.delivery_data == true"]
+        max_replicas_per_node: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        order: stop-first
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  geocoder:
+    image: ${BACKEND_IMAGE:-delivery-zone-backend:swarm-v1}
+    environment:
+      SPRING_PROFILES_ACTIVE: geocoder
+      DB_URL: jdbc:postgresql://db:5432/delivery_zone
+      DB_USER: ${DB_USER:-delivery}
+      DB_PASSWORD: ${DB_PASSWORD:-delivery_dev}
+      GEOCODING_BASE_URL: ${GEOCODING_BASE_URL:-https://nominatim.openstreetmap.org}
+      GEOCODING_USER_AGENT: ${GEOCODING_USER_AGENT:-DeliveryZoneAssessment/1.0 (B-002 educational dispatch demo)}
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60.0"
+    networks: [application]
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+    deploy:
+      # All backend replicas share this single outbound geocoding queue.
+      replicas: 1
+      placement:
+        constraints: ["node.labels.delivery_geocoder == true"]
+        max_replicas_per_node: 1
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: stop-first
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        order: stop-first
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 128M
+
+  backend:
+    image: ${BACKEND_IMAGE:-delivery-zone-backend:swarm-v1}
+    environment:
+      SPRING_PROFILES_ACTIVE: swarm
+      DB_URL: jdbc:postgresql://db:5432/delivery_zone
+      DB_USER: ${DB_USER:-delivery}
+      DB_PASSWORD: ${DB_PASSWORD:-delivery_dev}
+      GEOCODING_SERVICE_URL: http://geocoder:8080
+      FACTORY_LAT: ${FACTORY_LAT:--6.1751}
+      FACTORY_LNG: ${FACTORY_LNG:-106.8650}
+      INSTANCE_ID: "{{.Task.Name}}"
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=60.0"
+    networks: [application]
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 6
+    deploy:
+      replicas: 3
+      endpoint_mode: vip
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+        monitor: 60s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 128M
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-delivery-zone-frontend:swarm-v1}
+    networks: [application]
+    ports:
+      - target: 80
+        published: ${WEB_PORT:-3000}
+        protocol: tcp
+        mode: ingress
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      replicas: 2
+      endpoint_mode: vip
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: start-first
+        failure_action: rollback
+      resources:
+        limits:
+          memory: 64M
+        reservations:
+          memory: 16M
+
+networks:
+  application:
+    driver: overlay
+
+volumes:
+  delivery_data:
