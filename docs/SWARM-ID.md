@@ -344,12 +344,3 @@ cache persisten H2, fallback worker, serta pemisahan profil. Docker CLI berhasil
 memvalidasi file stack. Docker Engine tidak dapat diakses di lingkungan pengerjaan;
 image/container dan distribusi trafik Swarm belum dijalankan di sana. Langkah 4–7
 menjadi verifikasi runtime di laptop/servermu. Detail ada di `VERIFICATION.md`.
-
-Referensi resmi:
-
-- [Docker: deploy stack dan kebutuhan registry](https://docs.docker.com/engine/swarm/stack-deploy/)
-- [Docker: VIP, ingress, dan jaringan Swarm](https://docs.docker.com/engine/swarm/networking/)
-- [Docker: prasyarat jaringan Swarm](https://docs.docker.com/engine/swarm/swarm-tutorial/)
-- [Docker: environment interpolation dan batas .env pada Swarm](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)
-- [NGINX: proxy_pass](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass)
-- [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/)
