@@ -1,282 +1,134 @@
-# Delivery Zone & Distance Estimator
+# Menjalankan Delivery Zone
 
-Case B-002: geocode delivery addresses, calculate Haversine distance from a factory
-in Jakarta, and assign shipping zones on a dispatch board.
+Panduan ini menggunakan **Docker Desktop dan Git Bash di Windows**. Seluruh aplikasi—frontend, backend, dan database—dijalankan dengan Docker Compose. Kamu tidak perlu menginstal Java, Maven, atau Node.js secara terpisah.
 
-**Stack:** Java 17 · Spring Boot 3.5.6 · React 19 / TypeScript · Vite 7 · PostgreSQL 16
-· Flyway · Docker Compose / Docker Swarm. The user interface is in Indonesian.
+## 1. Siapkan Docker Desktop
 
-## Docker Swarm and load balancing
+Buka Docker Desktop dan tunggu sampai Engine berjalan. Pastikan Docker menggunakan **Linux containers**.
 
-Follow [docs/SWARM-ID.md](docs/SWARM-ID.md) for the complete PowerShell tutorial,
-Linux commands, scaling, troubleshooting and multi-node deployment. The stack runs
-3 backend replicas, 2 frontend replicas, 1 shared geocoder and 1 PostgreSQL instance.
-Swarm ingress and service VIPs distribute traffic. `/api/instance` lets you observe
-which backend handled each request without calling the geocoding provider.
+Buka Git Bash, lalu jalankan:
 
-Build both application images before `docker stack deploy`; the guide includes the
-required node labels and explains local images versus registry images. The stack
-uses shell environment variables; it does not automatically load `.env`.
+```bash
+docker version
+docker compose version
+```
 
-## Start with one command
+Pastikan `docker version` menampilkan bagian **Client dan Server**. Jika muncul error `dockerDesktopLinuxEngine`, tunggu Docker Desktop siap atau restart Docker Desktop sebelum melanjutkan.
 
-Install Docker Desktop with Docker Compose v2. From the repository root:
+Koneksi internet diperlukan untuk mengunduh image dan dependency saat pertama kali menjalankan proyek, serta untuk mencari koordinat alamat baru. Tidak diperlukan API key.
+
+## 2. Buka folder proyek
+
+Jika mengambil source dari GitHub, salin URL HTTPS repository melalui tombol **Code**, lalu gunakan URL tersebut pada perintah berikut. Ganti `URL_REPOSITORY` dengan URL sebenarnya:
+
+```bash
+git clone URL_REPOSITORY delivery-zone
+cd delivery-zone
+```
+
+Jika sudah mengunduh dan mengekstrak ZIP, cukup buka Git Bash di folder proyek. Contoh:
+
+```bash
+cd /c/Projects/delivery-zone
+```
+
+Sesuaikan path dengan lokasi foldermu. Jalankan `ls` dan pastikan ada `docker-compose.yml`, `backend`, dan `frontend`.
+
+**Semua perintah berikut dijalankan dari folder yang memuat `docker-compose.yml`.**
+
+## 3. Jalankan aplikasi
 
 ```bash
 docker compose up
 ```
 
-The first run builds images and downloads dependencies. Open **http://localhost:3000**
-after all services are healthy. No API key is required.
+Konfigurasi default sudah tersedia sehingga tidak perlu membuat `.env`. Build pertama dapat memerlukan beberapa menit untuk mengunduh dependency dan membangun image. Biarkan terminal ini tetap terbuka selama aplikasi digunakan.
 
-| Service | Address |
+Jika ingin aplikasi berjalan di background, gunakan perintah berikut sebagai alternatif:
+
+```bash
+docker compose up -d
+```
+
+Untuk memeriksa layanan, buka Git Bash kedua di folder proyek yang sama:
+
+```bash
+docker compose ps
+```
+
+Pastikan `db`, `backend`, dan `frontend` berjalan. Database dan backend memiliki health check; tunggu keduanya sehat sebelum membuka aplikasi.
+
+## 4. Buka aplikasi
+
+Buka **[http://localhost:3000](http://localhost:3000)** di browser. Aplikasi langsung menampilkan papan pengiriman tanpa halaman login.
+
+Untuk mencoba, isi referensi pesanan, misalnya `DO-2026-001`, dan alamat tujuan publik, misalnya `Monumen Nasional, Jakarta, Indonesia`. Pilih status, lalu klik tombol simpan di bagian bawah form.
+
+Alamat layanan pada konfigurasi default:
+
+| Layanan | Alamat |
 | --- | --- |
-| React board | http://localhost:3000 |
-| Delivery API | http://localhost:8080/api/deliveries |
-| Health check | http://localhost:8080/actuator/health |
-| PostgreSQL | localhost:5432; database `delivery_zone`; user `delivery`; password `delivery_dev` |
+| Halaman aplikasi | http://localhost:3000 |
+| API pengiriman | http://localhost:8080/api/deliveries |
+| Health check backend | http://localhost:8080/actuator/health |
 
-Compose waits for PostgreSQL health, starts Spring Boot, then React/Nginx. Flyway
-creates the tables. The frontend proxies `/api` to Spring Boot, avoiding CORS setup.
-Use `docker compose up --build` after source changes. `docker compose down` stops
-services while retaining the named database volume and cached coordinates.
+Jika pencarian alamat gagal, pengiriman dapat tersimpan sebagai `UNKNOWN`. Periksa koneksi internet dan log backend, kemudian gunakan tombol retry setelah layanan geocoding tersedia kembali.
 
-Copy `.env.example` to `.env` only to override ports, credentials or provider settings.
-Development credentials are local defaults. Authentication is not included.
+## 5. Hentikan atau jalankan kembali
 
-## Nominatim usage
-
-**Read the [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/)
-before calling the public endpoint.** This application uses the provider explicitly
-specified in the assessment. Public Nominatim permits light interactive usage with
-a maximum of one request per second, an identifiable User-Agent, attribution and
-cached results. Autocomplete and systematic querying are not allowed. Do not submit
-personal or confidential data; use public landmarks for this demonstration.
-
-The application sends a descriptive `GEOCODING_USER_AGENT`, caches successful results,
-serializes outbound requests with a minimum 1.1-second interval after the previous
-request finishes, and shows attribution in the UI. Lookups happen on form submission
-or explicit retry, never while typing. Replace the demo User-Agent with your own
-application identity and repository/contact before external use. Use a suitable
-hosted/self-hosted provider for larger use; `GEOCODING_BASE_URL` is configurable.
-Automated tests use mocks and a local HTTP stub, never the public service.
-
-## Implemented requirements
-
-| Priority | Requirement | Implementation |
-| --- | --- | --- |
-| P0 | Create/list, validation, 404 | REST API, Bean Validation, JSON errors |
-| P0 | Open API geocoding | Nominatim HTTP adapter |
-| P0 | Database cache | Unique normalized address, coordinates and fetch time |
-| P0 | Haversine and zones | Own calculation, exact boundaries before rounding |
-| P0 | React board | List/create form, loading/empty/success/error states |
-| P0 | Provider outage | Cache-first resolution or persist UNKNOWN |
-| P1 | Docker Compose | Full stack: database, backend and frontend |
-| P1 | Update/delete | Edit form and delete confirmation |
-| P1 | Zone/status filters | Server-side filters combined with AND |
-| P1 | Coordinate metadata | Expandable details next to each zone badge |
-| P2 | Additional feature | Explicit retry for unresolved deliveries |
-| P2 | Cost/ETA | Illustrative per-zone estimate |
-| P2 | Tests | Distance, boundaries, cache, fallback, concurrency and REST |
-| P2 | Rate limit/User-Agent | One shared geocoding queue in Swarm; in-process limiter in Compose |
-| Extra | Docker Swarm | Overlay network, ingress/VIP, replicated frontend/backend, health checks |
-| Extra | Separate geocoding service | Internal HTTP endpoint and timeout-bound client in Swarm mode |
-
-Compose and local development run as a **modular monolith**. Swarm starts the
-geocoding module in a separate process using the same image and a different Spring
-profile. The delivery API and geocoder share the database in this assessment.
-
-## Rules and assumptions
-
-Factory: **latitude -6.1751, longitude 106.8650**.
-
-| Zone | Haversine distance | Illustrative cost / shipment | Illustrative ETA |
-| --- | --- | --- | --- |
-| LOCAL | Less than 50 km | IDR 25,000 | 1 day |
-| REGIONAL | 50–300 km, including both boundaries | IDR 75,000 | 2–3 days |
-| LONG_HAUL | Greater than 300 km | IDR 150,000 | 4–7 days |
-| UNKNOWN | Coordinates unavailable | No estimate | No estimate |
-
-The brief supplies no rates/SLA: prices and ETAs are **demonstration assumptions**,
-not carrier quotes. They ignore weight, traffic, ferries, weekends and cut-off times.
-Distance is a straight-line great-circle estimate, **not a road route**. Earth radius
-is 6,371.0088 km. Coordinates use six decimal places, distance uses two. Zone is
-classified on unrounded distance calculated from those coordinates: 49.999 remains
-LOCAL even when displayed as 50.00; 300.001 remains LONG_HAUL.
-
-Statuses: PLANNED, IN_TRANSIT, DELIVERED, CANCELLED. Transitions are unrestricted.
-Omitted/null status defaults to PLANNED on create and preserves status on update.
-Order reference is required, maximum 50 characters; it is not unique because an
-order may have multiple deliveries. Address is required, maximum 300 characters.
-
-## Cache and failure handling
-
-1. Trim outer whitespace, collapse internal whitespace and lowercase with
-   `Locale.ROOT`. Preserve punctuation/diacritics to avoid merging different addresses.
-   The cache `address` is the normalized key; delivery keeps the user's trimmed address.
-2. Read the DB cache first. Cache hits do not wait for the outbound lock or API health.
-3. On a miss, acquire the global outbound lock and recheck the cache. Concurrent
-   identical keys in this worker produce one lookup. Cache writes commit before
-   the lock is released.
-4. Wait for the interval, then call Nominatim. A connection/request timeout is five
-   seconds. Successful coordinates are validated and cached with their fetch time.
-5. HTTP failures, timeout, invalid JSON/coordinates or network failure become
-   UNAVAILABLE, with a 30-second provider cooldown. Empty results become NOT_FOUND.
-   Recheck cache on failure; otherwise persist null coordinates/distance and UNKNOWN.
-
-Successful cache entries never expire in this assessment, matching the brief's
-“don't call the API for the same address twice.” Empty/failed lookups are not
-permanently cached; explicit retry may resolve them later. Misses during cooldown
-return UNKNOWN immediately. Coordinates `(0,0)` are never fabricated.
-
-List/get endpoints read only delivery snapshots and never call the provider.
-Status/reference-only edits preserve the snapshot. A changed address replaces old
-coordinates, including clearing them if the new address is unresolved. UNKNOWN
-deliveries are not automatically retried in the background.
-
-`geocodeSource` describes the last calculation, not live API health. Fetch time
-records when coordinates were originally obtained, even for cache hits.
-Database availability is still required: resilience here covers the external
-geocoding API, not a PostgreSQL outage.
-
-In Swarm, every backend first reads the shared database cache, then delegates cache
-misses to the single geocoder over HTTP. An internal failure/20-second timeout
-triggers a final cache recheck, otherwise UNKNOWN. Backend replicas do not call
-Nominatim directly. Keep the geocoder at one replica on exactly one labelled node;
-it uses stop-first updates. The queue is intended for light interactive traffic.
-
-## Architecture and schema
-
-```mermaid
-flowchart TD
-    UI[React dispatch board] --> API[Delivery REST API]
-    API --> DB[(Relational database)]
-    API --> GEO[Geocoding package]
-    GEO --> DB
-    GEO --> EXT[Nominatim HTTP API]
-```
-
-- `backend/.../delivery`: controller, service, entity/repository, zones and estimates.
-- `backend/.../geocoding`: provider interface, HTTP adapter, cache, request timing policy and Haversine.
-- `backend/.../config`: factory configuration and read-only configuration endpoint.
-- `backend/.../shared`: consistent JSON errors.
-- `frontend/src/components`: delivery form, board, cards, coordinate details and delete dialog.
-- `frontend/src/hooks/useDeliveries.ts`: data loading, cancellation and refresh.
-- `frontend/src/api.ts` / `formatters.ts`: typed HTTP calls and presentation formatting.
-
-`Delivery` encapsulates state changes; `DeliveryService` coordinates use cases.
-Naming and the practical Clean Code, SOLID and KISS decisions are explained in
-[docs/CODE-STYLE-ID.md](docs/CODE-STYLE-ID.md).
-
-Schema: `backend/src/main/resources/db/migration/V1__create_delivery_and_geocode_cache.sql`.
-PostgreSQL is used because Oracle is optional. H2 provides an optional file-backed
-local profile and an in-memory integration-test database.
-
-The brief's columns are retained. Added delivery columns `geocoded_at`,
-`resolved_address` and `geocode_source` store coordinate metadata as a snapshot.
-Resolved/display addresses allow 500 characters rather than 300; labels from the
-provider are bounded accordingly. Timestamps include timezones; the browser formats
-them in its local timezone. Cache address uniqueness, zone/status checks, coordinate
-checks and a `(zone,status)` index provide basic database integrity and filtering.
-
-`DeliveryService` depends on `AddressResolver`. In local/Compose mode this is
-`GeocodingService`; profile `swarm` selects `RemoteAddressResolver`. Profile
-`geocoder` exposes `POST /internal/geocoding`, with the local cache/provider flow
-and no delivery endpoints. Delivery persistence and UI contracts stay unchanged.
-The geocoder endpoint is reachable inside the overlay network and is not proxied
-by the frontend. See the Swarm guide for the distributed topology and limits.
-
-## REST API
-
-| Method | Path | Result |
-| --- | --- | --- |
-| GET | `/api/deliveries` | List, newest first |
-| GET | `/api/deliveries?zone=LOCAL&status=PLANNED` | Combined filters |
-| GET | `/api/deliveries/{id}` | One delivery or 404 |
-| POST | `/api/deliveries` | Create; 201 and Location header |
-| PUT | `/api/deliveries/{id}` | Edit reference/address/status |
-| DELETE | `/api/deliveries/{id}` | Delete; 204 or 404 |
-| POST | `/api/deliveries/{id}/geocode` | Explicit retry; existing cache remains authoritative |
-| GET | `/api/config` | Factory coordinates |
-| GET | `/api/instance` | Backend task identity; no-store, for load balancing checks |
-| GET | `/actuator/health` | App/database health, independent of geocoder |
-
-Create/update body:
-
-```json
-{
-  "orderRef": "DO-2026-001",
-  "destAddress": "Monumen Nasional, Jakarta, Indonesia",
-  "status": "PLANNED"
-}
-```
-
-Responses include `id`, `orderRef`, `destAddress`, `destLat`, `destLng`, `distanceKm`,
-`zone`, `status`, `createdAt`, `geocodedAt`, `resolvedAddress`, `geocodeSource`,
-and `estimate` (`costIdr`, `minDays`, `maxDays`). UNKNOWN has null `estimate`.
-Validation errors return 400 with `message` and field-specific `errors`. Invalid
-enum values/malformed JSON return 400. Missing IDs return 404. API outage is a
-successful create with UNKNOWN, not a failed delivery creation.
-
-## Local development
-
-Requirements: JDK 17+, Maven 3.6.3+, Node.js 22.12+ and npm.
-
-Start only PostgreSQL and then the backend:
+Untuk menghentikan aplikasi, jalankan dari terminal lain di folder proyek:
 
 ```bash
-docker compose up -d db
-cd backend
-mvn spring-boot:run
+docker compose down
 ```
 
-Or skip Docker/PostgreSQL with persistent local H2:
+Data tetap tersimpan di volume database. Jangan menambahkan opsi `-v` jika ingin mempertahankan data.
+
+Untuk menjalankan kembali, gunakan folder proyek yang sama:
 
 ```bash
-cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=local
+docker compose up -d
 ```
 
-In another terminal:
+Jika source code berubah dan image perlu dibangun ulang:
 
 ```bash
-cd frontend
-npm ci
-npm run dev
+docker compose up -d --build
 ```
 
-Open http://localhost:5173. Vite proxies `/api` to backend port 8080. Spring Boot
-does not read root `.env` when run outside Compose; set shell environment variables
-for overrides. H2 local files are under `backend/data` and are excluded from Git.
+## Jika aplikasi belum bisa dibuka
 
-## Verification
+### Periksa log
 
 ```bash
-cd backend
-mvn verify
+docker compose logs --tail 100 backend
+docker compose logs --tail 100 frontend
+docker compose logs --tail 100 db
 ```
+
+Jika muncul `no configuration file provided`, pastikan terminal berada di folder yang memuat `docker-compose.yml`.
+
+### Jika port sudah digunakan aplikasi lain
+
+Port default proyek adalah **3000, 8080, dan 5432**. Untuk memakai port alternatif, jalankan di Git Bash:
 
 ```bash
-cd frontend
-npm ci
-npm test
-npm run build
+export WEB_PORT=3001
+export API_PORT=8081
+export DB_PORT=5433
+docker compose up -d
 ```
 
-GitHub Actions repeats these checks. Both application image builds run tests too. See
-[docs/VERIFICATION.md](docs/VERIFICATION.md) for checks actually performed and
-environment limitations, and [docs/DEMO-ID.md](docs/DEMO-ID.md) for an Indonesian
-demo/interview guide.
+Buka **http://localhost:3001**. API backend kini di port `8081` dan database di port `5433`. Nilai `export` berlaku pada terminal tersebut; jalankan lagi jika diperlukan dari terminal baru.
 
-## Trade-offs
+### Jika Delivery Zone sebelumnya dijalankan dengan Swarm
 
-Core correctness and an explainable structure take priority over production
-infrastructure. The list is unpaginated. There is no authentication or road map.
-Concurrent edits use last-write-wins. Many distinct simultaneous geocoding misses
-queue on one worker. No database transaction is held across the API call. Swarm
-replicates application services, but the database and geocoder are not highly
-available. A single laptop remains a single failure domain. Deployment files are
-included; no live cluster deployment is claimed.
+Jika ingin beralih ke Compose, hentikan stack Swarm terlebih dahulu agar port tidak bentrok:
 
-The repository contains incremental commits. If received as a ZIP, use the included
-Git bundle and START-HERE instructions to preserve commit history before pushing.
+```bash
+docker stack rm deliveryzone
+```
+
+Tunggu task lama berhenti, kemudian jalankan `docker compose up`. Volume Swarm tetap tersimpan, tetapi **Compose menggunakan volume database berbeda**, sehingga data Swarm tidak otomatis muncul di Compose.
+
+Jika ingin tetap menjalankan versi Swarm, ikuti [panduan Docker Swarm](docs/SWARM-ID.md). Docker Compose sudah cukup untuk menjalankan proyek sesuai brief.
