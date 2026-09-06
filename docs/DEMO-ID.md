@@ -62,12 +62,3 @@ dapat diperbanyak. Database dan geocoder belum high availability.
 
 **Apakah biaya dan ETA tarif sungguhan?** Tidak. Itu asumsi demonstrasi karena
 brief tidak memberikan rumus tarif atau SLA. Angkanya dijelaskan dalam README.
-
-## Sebelum dikumpulkan
-
-- Jalankan `mvn verify`, `npm test`, `npm run build`, dan `docker compose up --build` di komputer sendiri.
-- Coba alur browser dan simulasi di atas; periksa batas verifikasi pada `VERIFICATION.md`.
-- Sesuaikan User-Agent dengan identitas aplikasi/repository milikmu.
-- Pahami kode dan keputusan teknis, serta ikuti aturan bantuan alat dari penyelenggara jika ada.
-- Baca `CODE-STYLE-ID.md` untuk menjelaskan penamaan, Clean Code, SOLID, dan KISS yang diterapkan.
-- Gunakan bundle Git yang disertakan agar riwayat commit bertahap ikut dipublikasikan.
