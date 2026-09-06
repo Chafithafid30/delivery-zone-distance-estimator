@@ -29,7 +29,7 @@ Tidak ada data contoh yang diam-diam dianggap sebagai hasil API.
 Alamat `127.0.0.1:9` menunjuk ke container backend sendiri, hanya untuk simulasi
 koneksi gagal. Simulasi tidak membanjiri layanan publik.
 
-## Penjelasan singkat untuk interview
+## Penjelasan singkat
 
 **Mengapa monolith?** Brief mengharapkan satu aplikasi Spring Boot dengan batas
 modul yang jelas. Geocoding dipisahkan dalam package agar mudah dijelaskan dan
