@@ -2,6 +2,9 @@
 
 ## Menjalankan dan mendemonstrasikan aplikasi
 
+Untuk versi Swarm dengan load balancing, ikuti [SWARM-ID.md](SWARM-ID.md).
+Langkah berikut adalah jalur Compose satu backend.
+
 1. Jalankan Docker Desktop, buka terminal di folder proyek, lalu `docker compose up`.
 2. Buka `http://localhost:3000` setelah semua layanan sehat.
 3. Buat pengiriman dengan alamat publik seperti Monumen Nasional Jakarta,
@@ -32,7 +35,9 @@ koneksi gagal. Simulasi tidak membanjiri layanan publik.
 
 **Mengapa monolith?** Brief mengharapkan satu aplikasi Spring Boot dengan batas
 modul yang jelas. Geocoding dipisahkan dalam package agar mudah dijelaskan dan
-diekstrak menjadi service nanti, tanpa menambah kompleksitas operasional sekarang.
+dijalankan lokal dalam Compose. Untuk Swarm, modul tersebut dijalankan sebagai
+satu service terpisah memakai image yang sama dan profil `geocoder`. Backend
+profil `swarm` mengaksesnya melalui implementasi remote dari `AddressResolver`.
 
 **Mengapa PostgreSQL?** Relasional, mudah dijalankan dengan Compose, serta mendukung
 constraint dan migrasi. Oracle tidak diwajibkan. H2 dipakai untuk tes dan mode lokal.
@@ -50,8 +55,10 @@ adalah terhadap API geocoding; aplikasi tidak mengklaim mode offline tanpa DB.
 
 **Mengapa lock diperlukan?** Dua alamat baru berbeda tetap bisa melewati cache
 bersamaan. Lock global menjaga laju API; pengecekan cache kedua di dalam lock
-mencegah panggilan ganda untuk alamat sama. Untuk beberapa instance perlu koordinasi
-terpusat karena lock Java ini hanya melindungi satu proses.
+mencegah panggilan ganda untuk alamat sama. Pada Swarm, semua replika backend
+menggunakan satu geocoder terpusat karena lock Java hanya melindungi satu proses.
+Geocoder tetap satu replika dan memakai stop-first saat update; frontend/backend
+dapat diperbanyak. Database dan geocoder belum high availability.
 
 **Apakah biaya dan ETA tarif sungguhan?** Tidak. Itu asumsi demonstrasi karena
 brief tidak memberikan rumus tarif atau SLA. Angkanya dijelaskan dalam README.

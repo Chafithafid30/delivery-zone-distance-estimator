@@ -35,6 +35,9 @@ tempat pemetaan sehingga kontrak API dan kolom database tetap kompatibel.
 | `DeliveryController` | Menerima HTTP, validasi request, status dan Location header |
 | `DeliveryService` | Mengatur urutan proses CRUD, lookup, dan penyimpanan |
 | `Delivery` | Menjaga data dan aturan perubahan satu pengiriman |
+| `AddressResolver` | Kontrak penyelesaian alamat yang dipakai use case pengiriman |
+| `RemoteAddressResolver` | Baca cache bersama, panggil worker HTTP, dan fallback ketika worker gagal |
+| `InternalGeocodingController` | Validasi alamat untuk layanan geocoder internal |
 | `GeocodingService` | Alur cache, lookup, dan hasil saat provider tidak tersedia |
 | `GeocodingRequestPolicy` | Jeda antar-request dan cooldown setelah kegagalan |
 | `NominatimClient` | Menyusun request HTTP dan membaca respons provider |
@@ -66,6 +69,13 @@ Entity melakukan perhitungan murni; pemanggilan jaringan tetap di layanan.
   alamat. Pemakainya hanya bergantung pada kemampuan yang dibutuhkan.
 - **Dependency Inversion:** layanan menerima repository dan provider melalui
   constructor. Adapter HTTP dapat diganti dengan mock saat pengujian.
+
+Untuk Swarm, `DeliveryService` bergantung pada `AddressResolver`, dengan dua
+implementasi: lokal dan remote. Pemilihan dilakukan lewat konfigurasi Spring,
+sehingga aturan CRUD, jarak, dan zona tidak perlu mengetahui lokasi geocoder.
+Antarmuka ini memiliki satu operasi dengan hasil `GeocodeResult` yang sama.
+Satu image Java digunakan ulang untuk kedua peran, sehingga tidak ada duplikasi
+kode bisnis atau kebutuhan repository microservice baru untuk demo ini.
 
 ## Penerapan KISS
 

@@ -4,7 +4,19 @@ Case B-002: geocode delivery addresses, calculate Haversine distance from a fact
 in Jakarta, and assign shipping zones on a dispatch board.
 
 **Stack:** Java 17 · Spring Boot 3.5.6 · React 19 / TypeScript · Vite 7 · PostgreSQL 16
-· Flyway · Docker Compose. The user interface is in Indonesian.
+· Flyway · Docker Compose / Docker Swarm. The user interface is in Indonesian.
+
+## Docker Swarm and load balancing
+
+Follow [docs/SWARM-ID.md](docs/SWARM-ID.md) for the complete PowerShell tutorial,
+Linux commands, scaling, troubleshooting and multi-node deployment. The stack runs
+3 backend replicas, 2 frontend replicas, 1 shared geocoder and 1 PostgreSQL instance.
+Swarm ingress and service VIPs distribute traffic. `/api/instance` lets you observe
+which backend handled each request without calling the geocoding provider.
+
+Build both application images before `docker stack deploy`; the guide includes the
+required node labels and explains local images versus registry images. The stack
+uses shell environment variables; it does not automatically load `.env`.
 
 ## Start with one command
 
@@ -30,7 +42,7 @@ Use `docker compose up --build` after source changes. `docker compose down` stop
 services while retaining the named database volume and cached coordinates.
 
 Copy `.env.example` to `.env` only to override ports, credentials or provider settings.
-Development credentials are local defaults. No auth or deployment is included.
+Development credentials are local defaults. Authentication is not included.
 
 ## Nominatim usage
 
@@ -66,10 +78,13 @@ Automated tests use mocks and a local HTTP stub, never the public service.
 | P2 | Additional feature | Explicit retry for unresolved deliveries |
 | P2 | Cost/ETA | Illustrative per-zone estimate |
 | P2 | Tests | Distance, boundaries, cache, fallback, concurrency and REST |
-| P2 | Rate limit/User-Agent | Global limiter for one application instance |
+| P2 | Rate limit/User-Agent | One shared geocoding queue in Swarm; in-process limiter in Compose |
+| Extra | Docker Swarm | Overlay network, ingress/VIP, replicated frontend/backend, health checks |
+| Extra | Separate geocoding service | Internal HTTP endpoint and timeout-bound client in Swarm mode |
 
-This is the expected **modular monolith**. The optional separate geocoding
-microservice is not implemented; the extraction path is explained below.
+Compose and local development run as a **modular monolith**. Swarm starts the
+geocoding module in a separate process using the same image and a different Spring
+profile. The delivery API and geocoder share the database in this assessment.
 
 ## Rules and assumptions
 
@@ -101,7 +116,7 @@ order may have multiple deliveries. Address is required, maximum 300 characters.
    The cache `address` is the normalized key; delivery keeps the user's trimmed address.
 2. Read the DB cache first. Cache hits do not wait for the outbound lock or API health.
 3. On a miss, acquire the global outbound lock and recheck the cache. Concurrent
-   identical keys in this instance produce one lookup. Cache writes commit before
+   identical keys in this worker produce one lookup. Cache writes commit before
    the lock is released.
 4. Wait for the interval, then call Nominatim. A connection/request timeout is five
    seconds. Successful coordinates are validated and cached with their fetch time.
@@ -123,6 +138,12 @@ deliveries are not automatically retried in the background.
 records when coordinates were originally obtained, even for cache hits.
 Database availability is still required: resilience here covers the external
 geocoding API, not a PostgreSQL outage.
+
+In Swarm, every backend first reads the shared database cache, then delegates cache
+misses to the single geocoder over HTTP. An internal failure/20-second timeout
+triggers a final cache recheck, otherwise UNKNOWN. Backend replicas do not call
+Nominatim directly. Keep the geocoder at one replica on exactly one labelled node;
+it uses stop-first updates. The queue is intended for light interactive traffic.
 
 ## Architecture and schema
 
@@ -158,12 +179,12 @@ provider are bounded accordingly. Timestamps include timezones; the browser form
 them in its local timezone. Cache address uniqueness, zone/status checks, coordinate
 checks and a `(zone,status)` index provide basic database integrity and filtering.
 
-To extract a microservice: move the geocoding package, cache table and outbound
-limiter into one service, expose `POST /geocode` returning `GeocodeResult`, and
-replace the direct call in `DeliveryService` with a timeout-bound HTTP client.
-Delivery persistence and UI contracts can stay unchanged. Multiple replicas need
-centralized rate limiting and per-address deduplication; the current lock protects
-one Java process.
+`DeliveryService` depends on `AddressResolver`. In local/Compose mode this is
+`GeocodingService`; profile `swarm` selects `RemoteAddressResolver`. Profile
+`geocoder` exposes `POST /internal/geocoding`, with the local cache/provider flow
+and no delivery endpoints. Delivery persistence and UI contracts stay unchanged.
+The geocoder endpoint is reachable inside the overlay network and is not proxied
+by the frontend. See the Swarm guide for the distributed topology and limits.
 
 ## REST API
 
@@ -177,6 +198,7 @@ one Java process.
 | DELETE | `/api/deliveries/{id}` | Delete; 204 or 404 |
 | POST | `/api/deliveries/{id}/geocode` | Explicit retry; existing cache remains authoritative |
 | GET | `/api/config` | Factory coordinates |
+| GET | `/api/instance` | Backend task identity; no-store, for load balancing checks |
 | GET | `/actuator/health` | App/database health, independent of geocoder |
 
 Create/update body:
@@ -249,10 +271,12 @@ demo/interview guide.
 ## Trade-offs
 
 Core correctness and an explainable structure take priority over production
-infrastructure. The list is unpaginated. There is no authentication, road map,
-deployment or separate microservice. Concurrent edits use last-write-wins. The
-outbound lock suits light single-instance assessment traffic; many distinct
-simultaneous misses queue on it. No database transaction is held across the API call.
+infrastructure. The list is unpaginated. There is no authentication or road map.
+Concurrent edits use last-write-wins. Many distinct simultaneous geocoding misses
+queue on one worker. No database transaction is held across the API call. Swarm
+replicates application services, but the database and geocoder are not highly
+available. A single laptop remains a single failure domain. Deployment files are
+included; no live cluster deployment is claimed.
 
 The repository contains incremental commits. If received as a ZIP, use the included
 Git bundle and START-HERE instructions to preserve commit history before pushing.
